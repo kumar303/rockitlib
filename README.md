@@ -1,4 +1,4 @@
-rocketlib
+rockitlib
 =========
 
 A thin library to upload your mp3 files to a
