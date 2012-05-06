@@ -1,4 +1,5 @@
 import cookielib
+import hashlib
 import optparse
 import os
 import subprocess
@@ -35,9 +36,17 @@ def main():
         if not options.file.lower().endswith('mp3'):
             op.error('Can only sync mp3 files')
         with open(options.file) as fp:
+            hash = hashlib.sha1()
+            while True:
+                chunk = fp.read(1024 * 100)
+                if not chunk:
+                    break
+                hash.update(chunk)
+            sha1 = hash.hexdigest()
+        with open(options.file) as fp:
             sig_req = jwt.encode({'iss': options.email, 'aud': options.server},
                                  read_key(options.keypath))
-            params = {options.file: fp, 'sig_request': sig_req}
+            params = {options.file: fp, 'sig_request': sig_req, 'sha1': sha1}
             data, headers = multipart_encode(params)
             req = urllib2.Request('%s/upload' % options.server, data, headers)
             try:
