@@ -10,6 +10,8 @@ Run this from a virtualenv to install it:
 
     pip install -r requirements.txt
 
+Ask the rockit server admin to grant you an upload key then put that in
+``./upload_key.txt``.
 Start syncing music like this:
 
     python musicsync.py --file /path/to/mp3 --email <browserID email>
