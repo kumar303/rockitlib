@@ -14,6 +14,6 @@ Ask the rockit server admin to grant you an upload key then put that in
 ``./upload_key.txt``.
 Start syncing music like this:
 
-    python musicsync.py --file /path/to/mp3 --email <browserID email>
+    python musicsync.py path/to/mp3/or/directory --email <browserID email>
 
 See ``--help`` for usage.
