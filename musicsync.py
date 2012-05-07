@@ -178,10 +178,12 @@ def read_request(req):
     try:
         return urllib2.urlopen(req).read()
     except Exception, exc:
-        info(exc.headers)
-        with open('./error-msg.html', 'w') as fp:
-            fp.write(exc.read())
-        info('Error in %s' % fp.name)
+        if hasattr(exc, 'headers'):
+            info(exc.headers)
+        if hasattr(exc, 'read'):
+            with open('./error-msg.html', 'w') as fp:
+                fp.write(exc.read())
+            info('Error in %s' % fp.name)
         raise
 
 
@@ -202,7 +204,8 @@ def check_all_hashes(force=False):
 def upload_file(path):
     debug('syncing %s' % path)
     if not path.lower().endswith('mp3'):
-        raise ValueError('Can only sync mp3 files')
+        debug('Can only sync mp3 files; skipping %s' % path)
+        return
     check_hash.delay(path)
 
 
