@@ -6,8 +6,10 @@ import optparse
 import os
 from Queue import Queue
 import subprocess
+import sys
 import thread
 import threading
+import traceback
 import urllib2
 
 import jwt
@@ -19,6 +21,7 @@ from poster.streaminghttp import (StreamingHTTPHandler, StreamingHTTPRedirectHan
 hashes = {}
 queue = None
 options = None
+exceptions = []
 
 
 def main():
@@ -65,7 +68,15 @@ def main():
     queue.join()  # block until all tasks are done
     check_all_hashes(force=True)  # push any stragglers
     queue.join()
+    success = True
+    for etype, val, tb in exceptions:
+        success = False
+        info('')
+        traceback.print_exception(etype, val, tb)
+        info('')
+    info('Number of exceptions: %s' % len(exceptions))
     info('Done!')
+    sys.exit(0 if success else 1)
 
 
 class QueuableObject:
@@ -108,6 +119,8 @@ def upload(filename, sha1):
     with open(filename) as fp:
         sig_req = jwt.encode({'iss': options.email, 'aud': options.server},
                              read_key(options.keypath))
+        if isinstance(filename, unicode):
+            filename = filename.encode('utf8')
         params = {filename: fp, 'r': sig_req, 'sha1': sha1}
         data, headers = multipart_encode(params)
         req = urllib2.Request('%s/upload' % options.server, data, headers)
@@ -138,7 +151,11 @@ def worker():
         try:
             debug('running task %s' % task)
             task()
+        except Exception, exc:
+            info('EXCEPTION: %s: %s' % (type(exc).__name__, exc))
+            exceptions.append(sys.exc_info())
         finally:
+            debug('finishing task')
             queue.task_done()
 
 
