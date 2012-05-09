@@ -44,7 +44,8 @@ def main():
         op.error('incorrect usage')
     path = args[0]
 
-    handlers = [StreamingHTTPHandler, StreamingHTTPRedirectHandler, StreamingHTTPSHandler]
+    handlers = [StreamingHTTPHandler, StreamingHTTPRedirectHandler,
+                StreamingHTTPSHandler]
     cj = cookielib.CookieJar()
     opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj), *handlers)
     urllib2.install_opener(opener)
@@ -115,12 +116,12 @@ def check_hash(filename):
 
 @qtask
 def upload(filename, sha1):
-    debug('uploading %s' % filename)
-    with open(filename) as fp:
+    # Ensure file is Unicode:
+    filename = filename.decode(sys.getfilesystemencoding())
+    debug(u'uploading %s' % filename)
+    with open(filename, 'rb') as fp:
         sig_req = jwt.encode({'iss': options.email, 'aud': options.server},
                              read_key(options.keypath))
-        if isinstance(filename, unicode):
-            filename = filename.encode('utf8')
         params = {filename: fp, 'r': sig_req, 'sha1': sha1}
         data, headers = multipart_encode(params)
         req = urllib2.Request('%s/upload' % options.server, data, headers)
