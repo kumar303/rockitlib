@@ -40,11 +40,13 @@ def main():
     if len(args) != 1:
         op.error('incorrect usage')
     path = args[0]
+    # Ensure this and all paths are Unicode:
+    path = path.decode(sys.getfilesystemencoding())
 
     if not options.email:
         op.error('--email is required')
     info('server: %s' % options.server)
-    info('uploading: %s' % path)
+    info(u'uploading: %s' % path)
 
     queue = Queue()
     debug('starting %s workers' % options.workers)
@@ -96,7 +98,7 @@ def qtask(fn):
 
 @qtask
 def check_hash(filename):
-    with open(filename) as fp:
+    with open(filename, 'rb') as fp:
         hash = hashlib.sha1()
         while True:
             chunk = fp.read(1024 * 100)
@@ -108,8 +110,6 @@ def check_hash(filename):
 
 @qtask
 def upload(filename, sha1):
-    # Ensure file is Unicode:
-    filename = filename.decode(sys.getfilesystemencoding())
     debug(u'uploading %s' % filename)
     with open(filename, 'rb') as fp:
         sig_req = jwt.encode({'iss': options.email, 'aud': options.server},
@@ -202,15 +202,15 @@ def check_all_hashes(force=False):
 
 
 def upload_file(path):
-    debug('syncing %s' % path)
+    debug(u'syncing %s' % path)
     if not path.lower().endswith('mp3'):
-        debug('Can only sync mp3 files; skipping %s' % path)
+        debug(u'Can only sync mp3 files; skipping %s' % path)
         return
     check_hash.delay(path)
 
 
 def upload_dir(path):
-    info('syncing directory %s' % path)
+    info(u'syncing directory %s' % path)
     for root, dirs, files in os.walk(path):
         for fn in files:
             check_hash.delay(os.path.join(root, fn))
