@@ -10,12 +10,9 @@ import sys
 import thread
 import threading
 import traceback
-import urllib2
 
 import jwt
-from poster.encode import multipart_encode
-from poster.streaminghttp import (StreamingHTTPHandler, StreamingHTTPRedirectHandler,
-                                  StreamingHTTPSHandler)
+import requests
 
 # see main()
 hashes = {}
@@ -44,15 +41,10 @@ def main():
         op.error('incorrect usage')
     path = args[0]
 
-    handlers = [StreamingHTTPHandler, StreamingHTTPRedirectHandler,
-                StreamingHTTPSHandler]
-    cj = cookielib.CookieJar()
-    opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj), *handlers)
-    urllib2.install_opener(opener)
-
     if not options.email:
         op.error('--email is required')
     info('server: %s' % options.server)
+    info('uploading: %s' % path)
 
     queue = Queue()
     debug('starting %s workers' % options.workers)
@@ -122,10 +114,9 @@ def upload(filename, sha1):
     with open(filename, 'rb') as fp:
         sig_req = jwt.encode({'iss': options.email, 'aud': options.server},
                              read_key(options.keypath))
-        params = {filename: fp, 'r': sig_req, 'sha1': sha1}
-        data, headers = multipart_encode(params)
-        req = urllib2.Request('%s/upload' % options.server, data, headers)
-        result = read_request(req)
+        result = do_post('%s/upload' % options.server,
+                         data={'r': sig_req, 'sha1': sha1},
+                         files={filename: fp})
         debug('uploaded %s' % fp.name)
 
 
@@ -134,8 +125,7 @@ def maybe_upload(all_hashes):
     sig_req = jwt.encode({'iss': options.email, 'aud': options.server,
                           'request': {'sha1s': all_hashes.keys()}},
                          read_key(options.keypath))
-    req = urllib2.Request('%s/checkfiles?r=%s' % (options.server, sig_req))
-    result = read_request(req)
+    result = do_get('%s/checkfiles?r=%s' % (options.server, sig_req))
     data = json.loads(result)
     debug('checking if %s hashes exist' % len(all_hashes))
     for sha1, exists in data['sha1s'].items():
@@ -174,10 +164,19 @@ def read_key(path):
         return str(fp.read().strip())
 
 
-def read_request(req):
-    debug('reading request: %s' % req)
+def do_get(*args, **kw):
+    return _do_request('get', *args, **kw)
+
+
+def do_post(*args, **kw):
+    return _do_request('post', *args, **kw)
+
+
+def _do_request(method, *args, **kw):
+    _request = getattr(requests, method)
     try:
-        return urllib2.urlopen(req).read()
+        res = _request(*args, **kw)
+        return res.text
     except Exception, exc:
         if hasattr(exc, 'headers'):
             info(exc.headers)
