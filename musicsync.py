@@ -203,8 +203,10 @@ def check_all_hashes(force=False):
 
 def upload_file(path):
     debug(u'syncing %s' % path)
-    if not path.lower().endswith('mp3'):
-        debug(u'Can only sync mp3 files; skipping %s' % path)
+    supported = ('mp3', 'm4a')
+    if not path.lower().endswith(supported):
+        debug(u'Can only sync %s files; skipping %s' % (' or '.join(supported),
+                                                        path))
         return
     check_hash.delay(path)
 
