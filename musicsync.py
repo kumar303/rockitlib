@@ -176,6 +176,9 @@ def _do_request(method, *args, **kw):
     _request = getattr(requests, method)
     try:
         res = _request(*args, **kw)
+        if not str(res.status_code).startswith('2'):
+            raise ValueError('Bad response status to %r: %s'
+                             % (args, res.status_code))
         return res.text
     except Exception, exc:
         if hasattr(exc, 'headers'):
