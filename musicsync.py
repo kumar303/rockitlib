@@ -34,6 +34,12 @@ def main():
     op.add_option('--workers', help='number of worker threads. '
                                     'default: %default',
                   action='store', default=4, type=int)
+    op.add_option('--purge', help='When True, delete all files on the '
+                                  'server which do not exist locally. '
+                                  'The files will be deleted forever.',
+                  action='store_true', default=False)
+    op.add_option('--session-key', help='Sync session key. '
+                                        'A new one will be created if blank')
     op.add_option('--verbose', help='moar output',
                   action='store_true')
     (options, args) = op.parse_args()
@@ -47,6 +53,17 @@ def main():
         op.error('--email is required')
     info('server: %s' % options.server)
     info(u'uploading: %s' % path)
+    if not options.session_key:
+        sig_req = jwt.encode({'iss': options.email, 'aud': options.server},
+                             read_key(options.keypath))
+        result = do_post('%s/sync/start' % options.server,
+                         data={'r': sig_req})
+        result = json.loads(result)
+        if not result['success']:
+            op.error('Failed to start session: %s' % result['message'])
+        options.session_key = result['session_key']
+
+    info('upload session key: %s' % options.session_key)
 
     queue = Queue()
     debug('starting %s workers' % options.workers)
@@ -70,6 +87,18 @@ def main():
         traceback.print_exception(etype, val, tb)
         info('')
     info('Number of exceptions: %s' % len(exceptions))
+    info('finishing...')
+    if success:
+        sig_req = jwt.encode({'iss': options.email, 'aud': options.server,
+                              'request': {'session_key': options.session_key,
+                                          'purge': options.purge}},
+                             read_key(options.keypath))
+        result = do_post('%s/sync/finish' % options.server,
+                         data={'r': sig_req})
+        result = json.loads(result)
+        if not result['success']:
+            op.error('Failed to finish session: %s' % result['message'])
+        info('finished session; purge=%r' % options.purge)
     info('Done!')
     sys.exit(0 if success else 1)
 
@@ -112,20 +141,23 @@ def check_hash(filename):
 def upload(filename, sha1):
     debug(u'uploading %s' % filename)
     with open(filename, 'rb') as fp:
-        sig_req = jwt.encode({'iss': options.email, 'aud': options.server},
+        sig_req = jwt.encode({'iss': options.email, 'aud': options.server,
+                              'request': {'sha1': sha1,
+                                          'session_key': options.session_key}},
                              read_key(options.keypath))
-        result = do_post('%s/upload' % options.server,
-                         data={'r': sig_req, 'sha1': sha1},
-                         files={filename: fp})
+        result = do_post('%s/sync/upload' % options.server,
+                         data={'r': sig_req}, files={filename: fp})
         debug('uploaded %s' % fp.name)
 
 
 @qtask
 def maybe_upload(all_hashes):
     sig_req = jwt.encode({'iss': options.email, 'aud': options.server,
-                          'request': {'sha1s': all_hashes.keys()}},
+                          'request': {'sha1s': all_hashes.keys(),
+                                      'session_key': options.session_key}},
                          read_key(options.keypath))
-    result = do_get('%s/checkfiles?r=%s' % (options.server, sig_req))
+    result = do_post('%s/sync/checkfiles' % options.server,
+                     data={'r': sig_req})
     data = json.loads(result)
     debug('checking if %s hashes exist' % len(all_hashes))
     for sha1, exists in data['sha1s'].items():
